@@ -85,15 +85,34 @@
     return null;
   }
 
+  /* ---------- 찜 / 가봤어요 / 제외 (기기에만 저장) ---------- */
+  function flag(name) {
+    return {
+      list: function (kind) { return store.get(name + '.' + kind, []); },
+      has: function (kind, id) { return this.list(kind).indexOf(id) >= 0; },
+      toggle: function (kind, id) {
+        var a = this.list(kind); var i = a.indexOf(id);
+        if (i >= 0) a.splice(i, 1); else a.push(id);
+        store.set(name + '.' + kind, a); return i < 0;
+      }
+    };
+  }
+  var FAV = flag('fav'), VISITED = flag('visited'), BAN = flag('ban');
+
   /* ---------- 필터 / 후보 ---------- */
   function getFilter(kind) { return store.get('f.' + kind, {}); }
-  function candidates(kind) {
+  function matches(kind, it) {
     var f = getFilter(kind);
+    return KIND[kind].groups.every(function (g) {
+      var sel = (f[g.key] || []).filter(function (v) { return g.values.indexOf(v) >= 0; });
+      return !sel.length || sel.some(function (v) { return g.match(it, v); });
+    });
+  }
+  function onlyNew(kind) { return store.get('new.' + kind, false) === true; }
+  function candidates(kind) {
+    var nw = onlyNew(kind);
     return KIND[kind].items.filter(function (it) {
-      return KIND[kind].groups.every(function (g) {
-        var sel = (f[g.key] || []).filter(function (v) { return g.values.indexOf(v) >= 0; });
-        return !sel.length || sel.some(function (v) { return g.match(it, v); });
-      });
+      return matches(kind, it) && !BAN.has(kind, it.id) && !(nw && VISITED.has(kind, it.id));
     });
   }
   function toggleFilter(kind, key, v) {
@@ -113,14 +132,7 @@
     return h + (extra || '');
   }
 
-  /* ---------- 찜 / 최근 ---------- */
-  function favs(kind) { return store.get('fav.' + kind, []); }
-  function isFav(kind, id) { return favs(kind).indexOf(id) >= 0; }
-  function toggleFav(kind, id) {
-    var a = favs(kind); var i = a.indexOf(id);
-    if (i >= 0) a.splice(i, 1); else a.push(id);
-    store.set('fav.' + kind, a); return i < 0;
-  }
+  /* ---------- 최근 ---------- */
   function recent(kind) { return store.get('recent.' + kind, []); }
   function pushRecent(kind, id) {
     var a = recent(kind).filter(function (x) { return x !== id; }); a.unshift(id);
@@ -168,17 +180,22 @@
       '<a href="' + kakao(q) + '" target="_blank" rel="noopener noreferrer">카카오맵</a></div></li>';
   }
   function actionsHTML(kind, it) {
-    var on = isFav(kind, it.id);
+    var fav = FAV.has(kind, it.id), vis = VISITED.has(kind, it.id), ban = BAN.has(kind, it.id);
+    var a = ' data-kind="' + kind + '" data-id="' + esc(it.id) + '"';
     return '<div class="btn-row three">' +
-      '<button type="button" class="btn primary" data-act="reroll" data-kind="' + kind + '" data-id="' + esc(it.id) + '">🎲 다시 뽑기</button>' +
-      '<button type="button" class="btn' + (on ? ' on' : '') + '" data-act="fav" data-kind="' + kind + '" data-id="' + esc(it.id) + '" aria-pressed="' + on + '">' + (on ? '♥ 찜함' : '♡ 찜') + '</button>' +
-      '<button type="button" class="btn" data-act="share" data-kind="' + kind + '" data-id="' + esc(it.id) + '">📤 공유</button></div>';
+      '<button type="button" class="btn primary" data-act="reroll"' + a + '>🎲 다시 뽑기</button>' +
+      '<button type="button" class="btn' + (fav ? ' on' : '') + '" data-act="fav"' + a + ' aria-pressed="' + fav + '">' + (fav ? '♥ 찜함' : '♡ 찜') + '</button>' +
+      '<button type="button" class="btn" data-act="share"' + a + '>🔗 링크 공유</button></div>' +
+      '<div class="btn-row three">' +
+      '<button type="button" class="btn' + (vis ? ' on' : '') + '" data-act="visit"' + a + ' aria-pressed="' + vis + '">' + (vis ? '✓ 가봤어요' : '☐ 가봤어요') + '</button>' +
+      '<button type="button" class="btn' + (ban ? ' on' : '') + '" data-act="ban"' + a + ' aria-pressed="' + ban + '">' + (ban ? '🚫 제외됨' : '🚫 제외') + '</button>' +
+      '<button type="button" class="btn" data-act="card"' + a + '>🖼 카드 저장</button></div>';
   }
 
   function homeHTML(kind) {
     var K = KIND[kind]; var pool = candidates(kind);
     var isT = kind === 'travel';
-    var fv = favs(kind).map(function (id) { return byId(kind, id); }).filter(Boolean);
+    var fv = FAV.list(kind).map(function (id) { return byId(kind, id); }).filter(Boolean);
     var rc = recent(kind).map(function (id) { return byId(kind, id); }).filter(Boolean).slice(0, 6);
     function minis(arr) {
       return '<div class="mini-list">' + arr.map(function (it) {
@@ -188,19 +205,30 @@
     return '<section class="hero"><div class="hero-emoji" aria-hidden="true">' + (isT ? '🧭' : '🚇') + '</div>' +
       '<h2>' + (isT ? '이번엔 어디로 떠날까요?' : '오늘은 어느 역에서 놀까요?') + '</h2>' +
       '<p>' + (isT ? '국내 여행지를 랜덤으로 골라드려요' : '서울·경기·인천 지하철역과 주변 놀거리를 골라드려요') + '</p>' +
-      '<div class="filters" id="flt">' + filtersHTML(kind) + '</div>' +
-      '<div class="count-note" id="cnt"></div>' +
+      '<div class="filters" id="flt">' + filtersHTML(kind, homeExtra(kind)) + '</div>' +
+      '<div class="count-note" id="cnt"></div><div class="stats" id="stats"></div>' +
       '<button type="button" class="cta" id="rollBtn" data-act="roll" data-kind="' + kind + '">🎲 랜덤으로 뽑기</button>' +
       '<a class="link-more" href="#/' + kind + '/all">전체 ' + K.items.length + K.unit + ' 한눈에 보기 →</a></section>' +
       (rc.length ? '<h3 class="section-title">최근 뽑은 ' + K.noun + '</h3>' + minis(rc) : '') +
       (fv.length ? '<h3 class="section-title">♥ 찜한 ' + K.noun + '</h3>' + minis(fv) : '') +
       '<div id="install"></div>';
   }
+  function homeExtra(kind) {
+    return '<h3>뽑기 옵션</h3><div class="chips"><button type="button" class="chip" data-act="onlynew" data-kind="' + kind +
+      '" aria-pressed="' + onlyNew(kind) + '">✨ 안 가본 곳만</button></div>';
+  }
   function refreshHome(kind) {
     var pool = candidates(kind); var K = KIND[kind];
-    var flt = $('#flt'); if (flt) flt.innerHTML = filtersHTML(kind);
-    var c = $('#cnt'); if (c) c.textContent = '조건에 맞는 ' + K.noun + ' ' + pool.length + K.unit;
+    var flt = $('#flt'); if (flt) flt.innerHTML = filtersHTML(kind, homeExtra(kind));
+    var c = $('#cnt');
+    if (c) c.textContent = pool.length ? '조건에 맞는 ' + K.noun + ' ' + pool.length + K.unit : '뽑을 수 있는 곳이 없어요. 조건을 줄여 보세요';
     var b = $('#rollBtn'); if (b) b.disabled = !pool.length;
+    var st = $('#stats');
+    if (st) {
+      var v = VISITED.list(kind).filter(function (id) { return byId(kind, id); }).length;
+      var n = BAN.list(kind).filter(function (id) { return byId(kind, id); }).length;
+      st.innerHTML = '✓ 가본 곳 ' + v + ' / ' + K.items.length + (n ? ' · <button type="button" class="linkbtn" data-act="showban" data-kind="' + kind + '">🚫 제외한 곳 ' + n + '</button>' : '');
+    }
   }
 
   function travelDetailHTML(it) {
@@ -234,34 +262,43 @@
       '<p class="hint">일부 장소는 역에서 도보·버스 이동이 필요해요. 운영 여부는 방문 전에 확인해 주세요.</p></article>';
   }
 
-  var listState = { q: '', fav: false };
+  var listState = { q: '', fav: false, visited: false, ban: false };
   function listHTML(kind) {
     return '<div class="searchbox"><input id="q" type="search" enterkeyhint="search" autocomplete="off" aria-label="검색" ' +
       'placeholder="' + (kind === 'travel' ? '여행지·지역·장소 검색' : '역·노선·장소 검색') + '" value="' + esc(listState.q) + '"></div>' +
       '<div class="filters" id="flt"></div><div id="list"></div>';
   }
   function paintListFilters(kind) {
-    var extra = '<h3>보기</h3><div class="chips"><button type="button" class="chip" data-act="favonly" aria-pressed="' + listState.fav + '">♥ 찜한 곳만</button></div>';
+    var extra = '<h3>보기</h3><div class="chips">' +
+      '<button type="button" class="chip" data-act="favonly" aria-pressed="' + listState.fav + '">♥ 찜한 곳</button>' +
+      '<button type="button" class="chip" data-act="visitedonly" aria-pressed="' + listState.visited + '">✓ 가본 곳</button>' +
+      '<button type="button" class="chip" data-act="banonly" aria-pressed="' + listState.ban + '">🚫 제외한 곳</button></div>';
     var f = $('#flt'); if (f) f.innerHTML = filtersHTML(kind, extra);
   }
   function itemHTML(kind, it) {
     var href = '#/' + kind + '/p/' + enc(it.id);
-    var fav = isFav(kind, it.id) ? '<span class="fav-mark" aria-label="찜">♥</span>' : '';
+    var banned = BAN.has(kind, it.id);
+    var marks = '<span class="marks">' + (FAV.has(kind, it.id) ? '<span class="fav-mark" aria-label="찜">♥</span>' : '') +
+      (VISITED.has(kind, it.id) ? '<span class="badge ok">✓ 가봄</span>' : '') +
+      (banned ? '<span class="badge no">🚫 제외</span>' : '') + '</span>';
+    var cls = 'item' + (banned ? ' banned' : '');
     if (kind === 'travel') {
-      return '<a class="item" href="' + href + '"><div class="item-top"><span class="item-name">' + esc(it.name) + '</span>' + fav +
+      return '<a class="' + cls + '" href="' + href + '"><div class="item-top"><span class="item-name">' + esc(it.name) + '</span>' + marks +
         '</div><div class="badges"><span class="badge region">' + esc(it.region) + '</span>' +
         it.types.map(function (t) { return '<span class="badge">' + esc(t) + '</span>'; }).join('') + '</div>' +
         '<div class="item-sub">' + esc(it.desc) + '</div></a>';
     }
-    return '<a class="item" href="' + href + '"><div class="item-top"><span class="item-name">' + esc(stationLabel(it.name)) + '</span>' + fav +
+    return '<a class="' + cls + '" href="' + href + '"><div class="item-top"><span class="item-name">' + esc(stationLabel(it.name)) + '</span>' + marks +
       '</div><div class="badges">' + it.lines.map(lineBadge).join('') + '</div><div class="item-sub">' +
       it.spots.map(function (s) { return (CAT[s.cat] ? CAT[s.cat].e : '📍') + ' ' + esc(s.name); }).join(' · ') + '</div></a>';
   }
   function paintList(kind) {
-    var K = KIND[kind]; var pool = candidates(kind); var q = norm(listState.q);
-    var fv = favs(kind);
-    var items = pool.filter(function (it) {
-      if (listState.fav && fv.indexOf(it.id) < 0) return false;
+    var K = KIND[kind]; var q = norm(listState.q);
+    var items = K.items.filter(function (it) {
+      if (!matches(kind, it)) return false;
+      if (listState.fav && !FAV.has(kind, it.id)) return false;
+      if (listState.visited && !VISITED.has(kind, it.id)) return false;
+      if (listState.ban && !BAN.has(kind, it.id)) return false;
       if (!q) return true;
       var hay = it.name + it.region + (it.lines ? it.lines.join('') : '') + (it.types ? it.types.join('') : '') +
         it.spots.map(function (s) { return s.name + s.desc; }).join('');
@@ -405,6 +442,84 @@
     } else { toast('이 브라우저에서는 공유를 지원하지 않아요'); }
   }
 
+  /* ---------- 결과 카드 이미지 ---------- */
+  function clip(ctx, t, maxW) {
+    if (ctx.measureText(t).width <= maxW) return t;
+    while (t.length > 1 && ctx.measureText(t + '…').width > maxW) t = t.slice(0, -1);
+    return t + '…';
+  }
+  function wrapLines(ctx, text, maxW) {
+    var lines = [], cur = '';
+    for (var i = 0; i < text.length; i++) {
+      var t = cur + text[i];
+      if (ctx.measureText(t).width > maxW && cur) { lines.push(cur); cur = text[i]; } else cur = t;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function rrect(ctx, x, y, w, h, r) {
+    ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function drawCard(kind, it) {
+    var W = 1080, H = 1350, c = document.createElement('canvas'); c.width = W; c.height = H;
+    var ctx = c.getContext('2d');
+    var FONT = '"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif';
+    var g = ctx.createLinearGradient(0, 0, W, H); g.addColorStop(0, '#ff6a47'); g.addColorStop(1, '#5b57d6');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = '#ffffff'; ctx.font = '800 46px ' + FONT; ctx.fillText('🎲 오늘 어디가?', 70, 110);
+    ctx.fillStyle = '#ffffff'; rrect(ctx, 60, 150, W - 120, H - 300, 56); ctx.fill();
+    var isS = kind === 'subway';
+    var name = isS ? stationLabel(it.name) : it.name;
+    ctx.fillStyle = '#ff5a3c'; ctx.font = '800 40px ' + FONT;
+    ctx.fillText(isS ? '오늘의 지하철역' : '오늘의 여행지', 110, 250);
+    ctx.fillStyle = '#1f2540';
+    var size = 120; ctx.font = '900 ' + size + 'px ' + FONT;
+    while (ctx.measureText(name).width > W - 220 && size > 56) { size -= 6; ctx.font = '900 ' + size + 'px ' + FONT; }
+    ctx.fillText(name, 110, 250 + size + 20);
+    var y = 250 + size + 80;
+    ctx.fillStyle = '#6b7089'; ctx.font = '600 38px ' + FONT;
+    var sub = isS ? it.region + ' · ' + it.lines.map(function (l) { return /^\d$/.test(l) ? l + '호선' : l; }).join(' · ')
+                  : it.region + ' · ' + it.types.join(' · ') + ' · ' + it.season;
+    wrapLines(ctx, sub, W - 220).slice(0, 2).forEach(function (ln) { ctx.fillText(ln, 110, y); y += 52; });
+    y += 24;
+    it.spots.slice(0, 3).forEach(function (s) {
+      ctx.fillStyle = '#fff3ec'; rrect(ctx, 110, y, W - 220, 150, 28); ctx.fill();
+      ctx.fillStyle = '#1f2540'; ctx.font = '700 56px ' + FONT;
+      ctx.fillText(isS && CAT[s.cat] ? CAT[s.cat].e : '📍', 140, y + 94);
+      ctx.font = '800 42px ' + FONT; ctx.fillText(clip(ctx, s.name, W - 220 - 150), 230, y + 66);
+      ctx.fillStyle = '#6b7089'; ctx.font = '500 32px ' + FONT; ctx.fillText(clip(ctx, s.desc, W - 220 - 150), 230, y + 114);
+      y += 170;
+    });
+    ctx.textAlign = 'center'; ctx.fillStyle = '#ffffff'; ctx.font = '600 34px ' + FONT;
+    ctx.fillText(location.host + location.pathname.replace(/index\.html$/, ''), W / 2, H - 70);
+    return c;
+  }
+  function download(blob, fname) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 5000);
+    toast('이미지를 저장했어요');
+  }
+  function shareCard(kind, id) {
+    var it = byId(kind, id); if (!it) return;
+    var nm = kind === 'subway' ? stationLabel(it.name) : it.name;
+    var cv; try { cv = drawCard(kind, it); } catch (e) { toast('이미지를 만들지 못했어요'); return; }
+    cv.toBlob(function (blob) {
+      if (!blob) { toast('이미지를 만들지 못했어요'); return; }
+      var fname = '오늘어디가-' + nm + '.png';
+      var file = null; try { file = new File([blob], fname, { type: 'image/png' }); } catch (e) { /* 구형 브라우저 */ }
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: '오늘 어디가?', text: nm }).catch(function (e) {
+          if (!e || e.name !== 'AbortError') download(blob, fname);
+        });
+        return;
+      }
+      download(blob, fname);
+    }, 'image/png');
+  }
+
   /* ---------- 이벤트 위임 ---------- */
   document.addEventListener('click', function (e) {
     var a = e.target.closest ? e.target.closest('a[href^="#/"]') : null;
@@ -421,13 +536,27 @@
     else if (act === 'chip') {
       toggleFilter(route.kind, b.getAttribute('data-g'), b.getAttribute('data-v'));
       if (route.type === 'home') refreshHome(route.kind); else if (route.type === 'list') { paintListFilters(route.kind); paintList(route.kind); }
-    } else if (act === 'favonly') {
-      listState.fav = !listState.fav; paintListFilters(route.kind); paintList(route.kind);
+    } else if (act === 'favonly' || act === 'visitedonly' || act === 'banonly') {
+      var lk = act === 'favonly' ? 'fav' : act === 'visitedonly' ? 'visited' : 'ban';
+      listState[lk] = !listState[lk]; paintListFilters(route.kind); paintList(route.kind);
+    } else if (act === 'onlynew') {
+      store.set('new.' + kind, !onlyNew(kind)); if (route.type === 'home') refreshHome(kind);
+    } else if (act === 'showban') {
+      listState.fav = false; listState.visited = false; listState.ban = true; go('#/' + kind + '/all');
     } else if (act === 'fav') {
-      var on = toggleFav(kind, id);
+      var on = FAV.toggle(kind, id);
       b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.textContent = on ? '♥ 찜함' : '♡ 찜';
       toast(on ? '찜 목록에 담았어요' : '찜을 해제했어요');
-    } else if (act === 'share') share(kind, id);
+    } else if (act === 'visit') {
+      var vOn = VISITED.toggle(kind, id);
+      b.classList.toggle('on', vOn); b.setAttribute('aria-pressed', vOn); b.textContent = vOn ? '✓ 가봤어요' : '☐ 가봤어요';
+      toast(vOn ? '가본 곳으로 표시했어요' : '가본 표시를 지웠어요');
+    } else if (act === 'ban') {
+      var bOn = BAN.toggle(kind, id);
+      b.classList.toggle('on', bOn); b.setAttribute('aria-pressed', bOn); b.textContent = bOn ? '🚫 제외됨' : '🚫 제외';
+      toast(bOn ? '다음 뽑기부터 빼 둘게요' : '다시 뽑기에 포함돼요');
+    } else if (act === 'card') shareCard(kind, id);
+    else if (act === 'share') share(kind, id);
     else if (act === 'install' && deferredPrompt) {
       deferredPrompt.prompt();
       deferredPrompt.userChoice.then(function () { deferredPrompt = null; paintInstall(); }, function () { /* 무시 */ });

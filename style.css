@@ -232,3 +232,15 @@ button { font: inherit; color: inherit; }
   .page-in, .spin-dice { animation: none; }
   .cta { transition: none; }
 }
+
+/* ----- 가봤어요 / 제외 / 통계 ----- */
+.stats { text-align: center; font-size: 13px; color: var(--sub); margin: -2px 0 12px; font-weight: 600; }
+.linkbtn { border: 0; background: transparent; color: var(--blue); font-weight: 700; font-size: 13px; padding: 6px 4px; cursor: pointer; }
+.marks { display: inline-flex; align-items: center; gap: 6px; }
+.badge.ok { background: #d7f2e1; color: #0f6b38; }
+.badge.no { background: #fde0e0; color: #a12020; }
+.item.banned { opacity: .6; }
+@media (prefers-color-scheme: dark) {
+  .badge.ok { background: #1f4a36; color: #8fe3b5; }
+  .badge.no { background: #4a2327; color: #ffb3b3; }
+}
