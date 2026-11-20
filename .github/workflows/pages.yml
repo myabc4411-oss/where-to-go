@@ -47,5 +47,9 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+      # 업로드 직후 바로 조회하면 아티팩트가 아직 안 보이는 경우가 있어 잠깐 기다립니다.
+      - name: Wait for artifact
+        run: sleep 15
+
       - id: deployment
         uses: actions/deploy-pages@v4
