@@ -34,16 +34,17 @@
     '먹': { e: '🍜', n: '먹거리' }, '카페': { e: '☕', n: '카페' }, '놀': { e: '🎡', n: '놀거리' },
     '볼': { e: '🏛️', n: '볼거리' }, '걷': { e: '🌿', n: '산책' }, '쇼': { e: '🛍️', n: '쇼핑' }
   };
-  var ZONE = { '경기': '수도권', '인천': '수도권', '강원': '강원', '충북': '충청', '충남': '충청', '대전': '충청',
+  var ZONE = { '서울': '수도권', '경기': '수도권', '인천': '수도권', '세종': '충청', '광주': '전라', '강원': '강원', '충북': '충청', '충남': '충청', '대전': '충청',
     '전북': '전라', '전남': '전라', '경북': '경상', '경남': '경상', '대구': '경상', '부산': '경상', '울산': '경상', '제주': '제주' };
   var ZONES = ['수도권', '강원', '충청', '전라', '경상', '제주'];
   var TYPES = ['바다', '산·자연', '도시', '역사·전통', '섬'];
-  var REGIONS = ['서울', '경기', '인천'];
+  var REGIONS = ['서울', '경기', '인천', '부산', '대구', '대전', '광주'];
   var CATS = ['먹', '카페', '놀', '볼', '걷', '쇼'];
   var LINE_COLOR = {
     '1': '#0052A4', '2': '#00A84D', '3': '#EF7C1C', '4': '#00A5DE', '5': '#996CAC', '6': '#CD7C2F', '7': '#747F00',
     '8': '#E6186C', '9': '#BDB092', '신분당': '#D4003B', '수인분당': '#FABE00', '경의중앙': '#77C4A3', '공항철도': '#0090D2',
     '경춘': '#0C8E72', '경강': '#0054A6', '에버라인': '#56AD2D', '인천1': '#7CA8D5', '우이신설': '#B0CE18', '신림선': '#6789CA',
+    '부산1': '#F06A00', '부산2': '#3FAE49', '부산3': '#BB8C00', '부산4': '#217DCB', '동해선': '#0054A6', '대구1': '#D93F5C', '대구2': '#00A07A', '대구3': '#E5A100', '대전1': '#007448', '광주1': '#009088',
     'KTX': '#6b7089', 'GTX-A': '#9A6292', 'SRT': '#A5263B'
   };
   var DARK_INK = { '9': 1, '수인분당': 1, '경의중앙': 1, '인천1': 1, '우이신설': 1 };
@@ -55,9 +56,11 @@
       spots: r[5].map(function (s) { var p = s.split('|'); return { name: p[0], desc: p[1] || '' }; })
     };
   });
+  var NAME_COUNT = {};
+  (window.RAW_STATIONS || []).forEach(function (r) { NAME_COUNT[r[0]] = (NAME_COUNT[r[0]] || 0) + 1; });
   var STATIONS = (window.RAW_STATIONS || []).map(function (r) {
     return {
-      id: r[0], name: r[0], lines: r[1].split('·'), region: r[2],
+      id: NAME_COUNT[r[0]] > 1 ? r[0] + '~' + r[2] : r[0], name: r[0], lines: r[1].split('·'), region: r[2],
       spots: r.slice(3).map(function (s) { var p = s.split('|'); return { cat: p[0], name: p[1], desc: p[2] || '' }; })
     };
   });
@@ -168,8 +171,13 @@
   }
 
   /* ---------- 화면 조각(HTML) ---------- */
+  function lineLabel(l) {
+    var m = /^(부산|대구|대전|광주)(\d)$/.exec(l);
+    if (m) return m[1] + ' ' + m[2] + '호선';
+    return /^\d$/.test(l) ? l + '호선' : l;
+  }
   function lineBadge(l) {
-    var label = /^\d$/.test(l) ? l + '호선' : l;
+    var label = lineLabel(l);
     return '<span class="badge line' + (DARK_INK[l] ? ' dark-ink' : '') + '" style="background:' + (LINE_COLOR[l] || '#6b7089') + '">' + esc(label) + '</span>';
   }
   function spotHTML(icon, s, kindLabel) {
@@ -204,7 +212,7 @@
     }
     return '<section class="hero"><div class="hero-emoji" aria-hidden="true">' + (isT ? '🧭' : '🚇') + '</div>' +
       '<h2>' + (isT ? '이번엔 어디로 떠날까요?' : '오늘은 어느 역에서 놀까요?') + '</h2>' +
-      '<p>' + (isT ? '국내 여행지를 랜덤으로 골라드려요' : '서울·경기·인천 지하철역과 주변 놀거리를 골라드려요') + '</p>' +
+      '<p>' + (isT ? '국내 여행지를 랜덤으로 골라드려요' : '전국 지하철역과 주변 놀거리를 골라드려요') + '</p>' +
       '<div class="filters" id="flt">' + filtersHTML(kind, homeExtra(kind)) + '</div>' +
       '<div class="count-note" id="cnt"></div><div class="stats" id="stats"></div>' +
       '<button type="button" class="cta" id="rollBtn" data-act="roll" data-kind="' + kind + '">🎲 랜덤으로 뽑기</button>' +
@@ -480,7 +488,7 @@
     ctx.fillText(name, 110, 250 + size + 20);
     var y = 250 + size + 80;
     ctx.fillStyle = '#6b7089'; ctx.font = '600 38px ' + FONT;
-    var sub = isS ? it.region + ' · ' + it.lines.map(function (l) { return /^\d$/.test(l) ? l + '호선' : l; }).join(' · ')
+    var sub = isS ? it.region + ' · ' + it.lines.map(lineLabel).join(' · ')
                   : it.region + ' · ' + it.types.join(' · ') + ' · ' + it.season;
     wrapLines(ctx, sub, W - 220).slice(0, 2).forEach(function (ln) { ctx.fillText(ln, 110, y); y += 52; });
     y += 24;

@@ -7,7 +7,7 @@
 const BUILD = '__BUILD__';
 const CACHE = 'wtg-' + BUILD;
 const CORE = [
-  './', './index.html', './style.css', './app.js', './data.js',
+  './', './index.html', './style.css', './app.js', './data.js', './data-travel-1.js', './data-travel-2.js', './data-travel-3.js', './data-subway-2.js',
   './manifest.webmanifest', './privacy.html',
   './icons/icon-192.png', './icons/icon-512.png', './icons/favicon-32.png'
 ];
