@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>오늘 어디가? – 랜덤 여행지 · 지하철 놀거리</title>
+  <meta name="description" content="버튼 한 번으로 국내 여행지와 서울·경기 지하철역 놀거리를 정해드려요.">
+  <meta name="theme-color" content="#fff8f1" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#14172a" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="오늘 어디가?">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta property="og:title" content="오늘 어디가?">
+  <meta property="og:description" content="랜덤 국내 여행지 · 랜덤 지하철역 놀거리">
+  <meta property="og:type" content="website">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="appbar">
+    <button id="back" class="icon-btn" type="button" aria-label="뒤로 가기" hidden>
+      <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <h1 id="title">오늘 어디가?</h1>
+  </header>
+
+  <main id="app" tabindex="-1">
+    <noscript><p class="empty">이 앱은 JavaScript가 필요해요.</p></noscript>
+  </main>
+
+  <nav class="tabbar" aria-label="메인 메뉴">
+    <a class="tab" data-tab="travel" href="#/travel">
+      <span class="tab-ico" aria-hidden="true">🧭</span><span class="tab-txt">랜덤 여행지</span>
+    </a>
+    <a class="tab" data-tab="subway" href="#/subway">
+      <span class="tab-ico" aria-hidden="true">🚇</span><span class="tab-txt">랜덤 지하철</span>
+    </a>
+  </nav>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

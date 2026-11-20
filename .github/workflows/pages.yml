@@ -1,0 +1,51 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # 1) 커밋 해시를 서비스워커에 심어서, 배포할 때마다 설치된 앱이 "새 버전"을 자동 감지하게 합니다.
+      - name: Stamp build id
+        run: |
+          BUILD="${GITHUB_SHA::8}"
+          sed -i "s/__BUILD__/${BUILD}/g" sw.js
+          grep -n "const BUILD" sw.js
+
+      # 2) 배포할 파일만 _site 로 모읍니다 (.well-known 같은 점(.) 폴더도 포함).
+      #    upload-pages-artifact 는 버전에 따라 점 폴더를 빼기 때문에 직접 tar 로 묶어 올립니다.
+      - name: Stage site
+        run: |
+          mkdir _site
+          rsync -a --exclude '.git' --exclude '.github' --exclude '_site' --exclude 'README.md' ./ _site/
+          tar --dereference --hard-dereference -cvf "$RUNNER_TEMP/artifact.tar" -C _site .
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

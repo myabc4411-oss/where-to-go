@@ -1,0 +1,56 @@
+# 오늘 어디가? 🎲
+
+랜덤 국내 여행지 + 랜덤 지하철역(서울·경기·인천) 놀거리를 골라주는 모바일 웹앱(PWA)입니다.
+빌드 도구 없이 정적 파일만으로 동작합니다.
+
+## 파일 구성
+
+| 파일 | 역할 |
+|---|---|
+| `index.html` / `style.css` / `app.js` | 화면과 동작 |
+| `data.js` | **여행지·지하철역 데이터 (이 파일만 고치면 됩니다)** |
+| `sw.js` | 서비스워커 (오프라인 + 자동 업데이트) |
+| `manifest.webmanifest`, `icons/` | 설치형 앱 정보와 아이콘 |
+| `privacy.html` | 개인정보 처리방침 (구글 플레이 등록용) |
+| `.well-known/assetlinks.json` | 구글 플레이(TWA) 도메인 인증용 템플릿 |
+| `.github/workflows/pages.yml` | GitHub Pages 자동 배포 |
+
+## 1. GitHub에 배포하기
+
+1. GitHub에서 새 저장소를 만듭니다. (아래 “플레이스토어” 항목 때문에 이름을 `사용자명.github.io` 로 만드는 것을 권장)
+2. 이 폴더의 파일을 전부 올립니다. (`.github`, `.well-known`, `.nojekyll` 같은 점(.)으로 시작하는 항목도 포함)
+3. 저장소 **Settings → Pages → Build and deployment → Source** 를 **GitHub Actions** 로 바꿉니다.
+4. `main` 브랜치에 올리면 자동 배포됩니다. 주소: `https://사용자명.github.io/` (또는 `/저장소명/`)
+
+## 2. 데이터 수정 → 설치된 앱도 자동 반영
+
+`data.js` 를 고쳐서 `main` 에 올리기만 하면 됩니다.
+
+- 서비스워커가 **네트워크 우선**이라 앱을 열 때마다 최신 파일을 받아옵니다. (오프라인이면 저장된 버전 사용)
+- 배포할 때마다 Actions 가 커밋 해시를 `sw.js` 에 심어서, 앱을 쓰는 중이어도 “새 버전이 준비됐어요 [새로고침]” 안내가 뜨고 앱을 닫았다 열면 자동 적용됩니다.
+- 새 장소 추가 형식은 `data.js` 맨 위 주석을 보세요. 장소 이름에는 괄호를 쓰지 마세요(지도 검색어로 쓰입니다).
+
+## 3. 뒤로가기 동작
+
+- 기기 뒤로가기 / 화면 왼쪽 위 `‹` 버튼: 상세 → 목록(또는 홈) → 앱 종료 순서
+- “다시 뽑기”는 기록을 쌓지 않고 현재 화면을 교체하므로, 몇 번을 뽑아도 뒤로가기 한 번이면 홈으로 돌아갑니다.
+- 상세 화면 주소를 공유/새로고침해도 같은 화면이 열립니다. (`#/travel/p/제주`, `#/subway/p/홍대입구`)
+
+## 4. 구글 플레이스토어 (TWA)
+
+PWA 를 그대로 안드로이드 앱으로 묶을 수 있습니다. [PWABuilder](https://www.pwabuilder.com) 또는 Bubblewrap 사용.
+
+1. 배포된 주소를 PWABuilder 에 넣고 **Package for stores → Android** 로 AAB 를 받습니다.
+2. 패키지 이름(예: `com.내이름.wheretogo`)과 서명 키를 정합니다.
+3. 플레이 콘솔에서 앱 서명 **SHA-256 지문**을 확인해 `.well-known/assetlinks.json` 의 `package_name`, `sha256_cert_fingerprints` 를 바꿔서 다시 배포합니다.
+4. ⚠️ **assetlinks.json 은 도메인의 맨 위(루트)에 있어야 합니다.** 그래서
+   `https://사용자명.github.io/.well-known/assetlinks.json` 이 열려야 하고, `https://사용자명.github.io/저장소명/` 형태(프로젝트 사이트)에서는 인증이 안 되어 주소창이 보이는 앱이 됩니다.
+   → 저장소 이름을 `사용자명.github.io` 로 하거나, 커스텀 도메인을 연결하세요.
+5. 개인정보 처리방침 주소: `https://사용자명.github.io/privacy.html` (연락처 문구를 직접 채워 주세요)
+6. 새로 만든 **개인** 개발자 계정은 출시 전에 비공개 테스트(테스터 12명, 14일 연속)가 필요할 수 있습니다. 최신 조건은 플레이 콘솔 도움말에서 확인하세요.
+
+## 5. 로컬에서 확인
+
+```bash
+python3 -m http.server 8000   # 후 http://localhost:8000
+```
